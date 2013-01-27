@@ -2,7 +2,7 @@
 #define BUG_H_
 
 #include <fstream>
-#include "boost-1.52.0/boost/current_function.hpp"
+#include <boost/current_function.hpp>
 
 #ifndef DEBUG
 # define BUG(x)

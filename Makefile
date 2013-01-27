@@ -1,6 +1,6 @@
 CC=g++
 CXX=g++
-CFLAGS=-O3 -funroll-loops -c -std=c++0x
+CFLAGS=-O3 -funroll-loops -c -std=c++0x -DDEBUG
 LDFLAGS=-O3 -lm
 SOURCES=Bot.cpp MyBot.cpp State.cpp kdtree.c
 OBJECTS=$(addsuffix .o, $(basename ${SOURCES}))
@@ -10,7 +10,7 @@ EXECUTABLE=MyBot
 #CFLAGS+=-g -DDEBUG # -DBOOST_ENABLE_ASSERT_HANDLER
 CFLAGS+=-DBOOST_DISABLE_ASSERTS
 
-all: $(OBJECTS) $(EXECUTABLE)
+all: $(EXECUTABLE)
 
 .deps:
 	$(CXX) $(CFLAGS) -E -MM *.cpp > $@
@@ -29,7 +29,9 @@ clean:
 zip:
 	-rm MyBot.zip
 	dir=$$(basename $$(pwd)); \
-	zip -9 -i '*.h' -i '*.hpp' -i 'Bot.cpp' -i 'MyBot.cpp' -i 'State.cpp' -r -9 MyBot.zip "../$${dir}"
+	(cd ..; \
+	 zip -9 -i '*.h' -i '*.hpp' -i "$${dir}/Bot.cpp" -i "$${dir}/MyBot.cpp" -i "$${dir}/State.cpp" -i "$${dir}/kdtree.c" -i "$${dir}/Makefile" -r -9 "$${dir}/MyBot.zip" "$${dir}"; \
+	 )
 
 .PHONY: all clean zip
 

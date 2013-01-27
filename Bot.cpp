@@ -8,8 +8,8 @@ struct ExploringQueueElement {
     , direction(direction_)
   {}
 
-  int weight;
-  int direction;
+  double weight;
+  int    direction;
 };
 
 bool operator < (ExploringQueueElement const &left, ExploringQueueElement const &right) {
@@ -76,7 +76,7 @@ void Bot::makeMoves()
 
   int    const antsPerHill = myHills.empty() ? 0 : myAnts.size() / myHills.size();
   double const k = (antsPerHill < 6)
-                   ? 0.5
+                   ? 0.333
                    : (antsPerHill < 15)
                    ? 1.0 / 3.0
                    : 0.2;
@@ -151,7 +151,8 @@ void Bot::endTurn()
 }
 
 bool Bot::tryEnemyAntStep(Spot const &antSpot) {
-  int  enemyGoalMin = numeric_limits<int>::max(), enemyGoalMax = -1;
+  int  enemyGoalMin = numeric_limits<int>::max();
+  int  enemyGoalMax = -1;
   int  directionMin, directionMax;
   Spot enemySpot;
 
@@ -220,8 +221,8 @@ void Bot::performEnemyAntStep(Spot const &antSpot, Spot const &enemySpot, int co
     BUG(state.bug << "SAFE" << endl);
     if (!(antSquare.job == Job::Protect && state.distance2(antSquare.jobSpot, oppositeSpot) > state.attackradius2))
       state.makeMove(antSpot, direction);
-  // } else if (state.influenceMy[get<0>(probablyEnemy)][get<1>(probablyEnemy)] > state.influenceEnemy[get<0>(antSpot)][get<1>(antSpot)]) {
-  } else if (state.influenceMy[get<0>(enemySpot)][get<1>(enemySpot)] > state.influenceEnemy[get<0>(antSpot)][get<1>(antSpot)]) {
+  } else if (state.influenceMy[get<0>(probablyEnemy)][get<1>(probablyEnemy)] > state.influenceEnemy[get<0>(antSpot)][get<1>(antSpot)]) {
+  // } else if (state.influenceMy[get<0>(enemySpot)][get<1>(enemySpot)] > state.influenceEnemy[get<0>(antSpot)][get<1>(antSpot)]) {
     // Be aggresive if it save.
     // Otherwise, wait attack.
     if (state.influenceMy[get<0>(enemySpot)][get<1>(enemySpot)] > state.influenceEnemy[get<0>(nextSpot)][get<1>(nextSpot)] * 2) {
@@ -324,6 +325,13 @@ bool Bot::tryExploreStep(Spot const &antSpot) {
 void Bot::performExploreStep(Spot const &antSpot) {
   Square const &antSquare = state.grid[get<0>(antSpot)][get<1>(antSpot)];
   std::priority_queue<ExploringQueueElement> directions;
+  std::vector<double> weights;
+  // KDTree antsIndexButMe;
+
+  // for (auto const &spot : state.myAnts) {
+  //   if (antSpot != spot)
+  //     antsIndexButMe.insert(spot);
+  // }
 
   int const d_begin = antSquare.planJob == Job::Explore ? antSquare.planDirection : 0;
   int const d_end   = d_begin + TDIRECTIONS;
@@ -337,12 +345,48 @@ void Bot::performExploreStep(Spot const &antSpot) {
         && (state.distance2(antSquare.jobSpot, nextSpot) > state.attackradius2
            || state.distance2(antSquare.jobSpot, antSpot) > state.distance2(antSquare.jobSpot, nextSpot)))
       continue;
-    directions.push(ExploringQueueElement(state.gridExploring[get<0>(nextSpot)][get<1>(nextSpot)], direction));
+
+    // directions.push(
+    //   ExploringQueueElement(state.gridExploring[get<0>(nextSpot)][get<1>(nextSpot)],
+    //                         direction));
+    Spot  nearestAlly;
+    Spots nearestAllies;
+    bool  finded;
+    tie(nearestAllies, finded) = state.findNear(antSpot, state.myAntsIndex, state.viewradius2);
+    for (auto iter = nearestAllies.begin(); iter != nearestAllies.end(); ++iter) {
+      auto const &spot = *iter;
+      if (spot != antSpot) {
+        nearestAlly = spot;
+        break;
+      }
+    }
+    directions.push(
+      ExploringQueueElement(finded
+                              ? state.viewradius2 - state.distance2(nearestAlly, nextSpot)
+                              : state.gridExploring[get<0>(nextSpot)][get<1>(nextSpot)],
+                            direction));
+    weights.emplace_back(finded
+                           ? state.viewradius2 - state.distance2(nearestAlly, nextSpot)
+                           : state.gridExploring[get<0>(nextSpot)][get<1>(nextSpot)]);
   }
 
   while (!directions.empty()) {
     auto const dir(directions.top());
     directions.pop();
+
+    int  firstWeight   = weights[0];
+    bool isWeightEqual = true;
+    for (auto iter = weights.begin(); iter != weights.end(); ++iter) {
+      auto const &weight = *iter;
+      BUG(state.bug << "One cell with weight " << weight << std::endl);
+      isWeightEqual = isWeightEqual && weight == firstWeight;
+      if (!isWeightEqual)
+        break;
+    }
+    if (isWeightEqual) {
+      BUG(state.bug << "Nowhere to go." << std::endl)
+      //continue;
+    }
 
     int  const direction = dir.direction;
     Spot const nextSpot  = state.getSpot(antSpot, direction/*, state.viewradius*/);
